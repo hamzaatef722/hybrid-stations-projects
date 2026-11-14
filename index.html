@@ -2,37 +2,42 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hybrid Renewable Stations</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-  * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; font-family: system-ui, sans-serif; background: #111827; color: #e5e7eb; }
-  #app { display: flex; height: 100%; }
-  #side { width: 340px; display: flex; flex-direction: column; border-right: 1px solid #1f2937; background: #111827; }
-  #mapwrap { flex: 1; position: relative; }
+  :root { --peek: 140px; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; font-family: system-ui, sans-serif; background: #111827; color: #e5e7eb; overscroll-behavior: none; }
+  #app { display: flex; height: 100vh; height: 100dvh; }
+  #side { width: 340px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid #1f2937; background: #111827; z-index: 1200; }
+  #top { flex: none; }
+  #grip { display: none; }
+  #mapwrap { flex: 1; position: relative; min-width: 0; }
   #map { position: absolute; inset: 0; }
   header { padding: 16px; border-bottom: 1px solid #1f2937; }
   h1 { font-size: 17px; margin: 0 0 4px; }
   .sub { font-size: 12px; color: #9ca3af; }
-  .filters { padding: 14px 16px; border-bottom: 1px solid #1f2937; }
-  .row { margin-bottom: 12px; }
-  .row label { display: flex; justify-content: space-between; font-size: 12px; color: #9ca3af; margin-bottom: 4px; }
-  .row label b { color: #fde047; }
-  input[type=range] { width: 100%; accent-color: #facc15; }
-  select { width: 100%; background: #1f2937; color: #e5e7eb; border: 1px solid #374151; border-radius: 6px; padding: 8px; font-size: 13px; }
   .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 16px; border-bottom: 1px solid #1f2937; }
   .stat { background: #1f2937; border-radius: 8px; padding: 8px; text-align: center; }
   .stat b { display: block; font-size: 18px; color: #fde047; }
   .stat span { font-size: 11px; color: #9ca3af; }
-  #list { flex: 1; overflow-y: auto; }
+  #body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .filters { flex: none; padding: 14px 16px; border-bottom: 1px solid #1f2937; }
+  .row { margin-bottom: 12px; }
+  .row:last-child { margin-bottom: 0; }
+  .row label { display: flex; justify-content: space-between; font-size: 12px; color: #9ca3af; margin-bottom: 4px; }
+  .row label b { color: #fde047; }
+  input[type=range] { width: 100%; accent-color: #facc15; }
+  select { width: 100%; background: #1f2937; color: #e5e7eb; border: 1px solid #374151; border-radius: 6px; padding: 8px; font-size: 13px; }
+  #list { flex: 1; overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
   .item { padding: 10px 16px; border-bottom: 1px solid #1f2937; cursor: pointer; font-size: 13px; }
   .item:hover, .item.active { background: #1f2937; }
   .item .t { display: flex; justify-content: space-between; margin-bottom: 2px; }
   .item .t b { color: #fde047; }
   .item .d { font-size: 11px; color: #9ca3af; }
-  .toolbar { padding: 10px 16px; border-top: 1px solid #1f2937; display: flex; gap: 8px; }
-  button { flex: 1; background: #facc15; color: #111827; border: 0; border-radius: 6px; padding: 8px; font-weight: 600; cursor: pointer; }
+  .toolbar { flex: none; padding: 10px 16px; border-top: 1px solid #1f2937; display: flex; gap: 8px; }
+  button { flex: 1; background: #facc15; color: #111827; border: 0; border-radius: 6px; padding: 10px; font-weight: 600; cursor: pointer; font-size: 13px; }
   button.alt { background: #374151; color: #e5e7eb; }
   .leaflet-popup-content { font-size: 13px; line-height: 1.6; }
 
@@ -42,11 +47,11 @@
     background: rgba(17, 24, 39, 0.95); border: 1px solid #374151; border-radius: 10px;
     font-size: 12px; line-height: 1.7; direction: rtl; text-align: right;
   }
-  #legend .hd { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; cursor: pointer; font-weight: 600; font-size: 13px; }
+  #legend .hd { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; cursor: pointer; font-weight: 600; font-size: 13px; }
   #legend .bd { padding: 0 12px 10px; max-height: 50vh; overflow-y: auto; }
   #legend.collapsed .bd { display: none; }
   .li { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; }
-  .li input { margin-top: 5px; accent-color: #facc15; flex: none; }
+  .li input { margin-top: 5px; accent-color: #facc15; flex: none; width: 16px; height: 16px; }
   .sw { flex: none; margin-top: 4px; }
   .sw.y { width: 24px; height: 16px; border-radius: 3px; border: 2px solid #facc15; background: rgba(250, 204, 21, 0.18); }
   .sw.r { width: 24px; height: 16px; border-radius: 3px; border: 1px solid #ef4444; background: rgba(239, 68, 68, 0.45); }
@@ -59,46 +64,72 @@
   .note p { margin: 0 0 6px; }
 
   @media (max-width: 760px) {
-    #app { flex-direction: column-reverse; }
-    #side { width: 100%; height: 45%; border-right: 0; border-top: 1px solid #1f2937; }
-    #legend { width: 260px; bottom: 24px; }
+    #app { display: block; position: relative; overflow: hidden; }
+    #mapwrap { position: absolute; inset: 0; }
+    #side {
+      position: fixed; left: 0; right: 0; bottom: 0; width: 100%;
+      height: 66vh; height: 66dvh;
+      border-right: 0; border-top: 1px solid #374151; border-radius: 16px 16px 0 0;
+      box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.45);
+      padding-bottom: env(safe-area-inset-bottom);
+      transition: transform 0.25s ease;
+      transform: translateY(0);
+    }
+    #side.closed { transform: translateY(calc(100% - var(--peek))); }
+    #top { cursor: pointer; touch-action: manipulation; }
+    #grip { display: block; padding: 8px 0 2px; }
+    #grip span { display: block; width: 44px; height: 4px; border-radius: 2px; background: #4b5563; margin: 0 auto; }
+    header { padding: 6px 16px 8px; border-bottom: 0; }
+    h1 { font-size: 15px; margin-bottom: 2px; }
+    .stats { padding: 8px 16px 10px; }
+    .stat b { font-size: 16px; }
+    select { font-size: 16px; padding: 10px; }
+    .item { padding: 12px 16px; }
+    #legend { left: 10px; top: 10px; bottom: auto; width: min(300px, calc(100vw - 80px)); }
+    #legend .bd { max-height: 42vh; max-height: 42dvh; }
+    .leaflet-control-zoom { display: none; }
   }
 </style>
 </head>
 <body>
 <div id="app">
-  <aside id="side">
-    <header>
-      <h1>Hybrid Solar + Wind Stations</h1>
-      <div class="sub">Source: Microsoft Global Renewables Watch (2024 Q2)</div>
-    </header>
-    <div class="filters">
-      <div class="row">
-        <label>Region</label>
-        <select id="fRegion"></select>
-      </div>
-      <div class="row">
-        <label>Min turbines <b id="vTurb">3</b></label>
-        <input id="fTurb" type="range" min="3" max="30" value="3">
-      </div>
-      <div class="row">
-        <label>Min solar area (km²) <b id="vSolar">0.1</b></label>
-        <input id="fSolar" type="range" min="0.1" max="4" step="0.1" value="0.1">
-      </div>
-      <div class="row">
-        <label>Hybrid since (from year) <b id="vYear">2017</b></label>
-        <input id="fYear" type="range" min="2017" max="2024" value="2017">
+  <aside id="side" class="closed">
+    <div id="top">
+      <div id="grip"><span></span></div>
+      <header>
+        <h1>Hybrid Solar + Wind Stations</h1>
+        <div class="sub">Source: Microsoft Global Renewables Watch (2024 Q2)</div>
+      </header>
+      <div class="stats">
+        <div class="stat"><b id="sCount">0</b><span>stations</span></div>
+        <div class="stat"><b id="sTurb">0</b><span>turbines</span></div>
+        <div class="stat"><b id="sSolar">0</b><span>solar km²</span></div>
       </div>
     </div>
-    <div class="stats">
-      <div class="stat"><b id="sCount">0</b><span>stations</span></div>
-      <div class="stat"><b id="sTurb">0</b><span>turbines</span></div>
-      <div class="stat"><b id="sSolar">0</b><span>solar km²</span></div>
-    </div>
-    <div id="list"></div>
-    <div class="toolbar">
-      <button id="fit">Fit all</button>
-      <button id="dl" class="alt">Download GeoJSON</button>
+    <div id="body">
+      <div class="filters">
+        <div class="row">
+          <label>Region</label>
+          <select id="fRegion"></select>
+        </div>
+        <div class="row">
+          <label>Min turbines <b id="vTurb">3</b></label>
+          <input id="fTurb" type="range" min="3" max="30" value="3">
+        </div>
+        <div class="row">
+          <label>Min solar area (km²) <b id="vSolar">0.1</b></label>
+          <input id="fSolar" type="range" min="0.1" max="4" step="0.1" value="0.1">
+        </div>
+        <div class="row">
+          <label>Hybrid since (from year) <b id="vYear">2017</b></label>
+          <input id="fYear" type="range" min="2017" max="2024" value="2017">
+        </div>
+      </div>
+      <div id="list"></div>
+      <div class="toolbar">
+        <button id="fit">Fit all</button>
+        <button id="dl" class="alt">Download GeoJSON</button>
+      </div>
     </div>
   </aside>
 
@@ -144,6 +175,10 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const WIND_ZOOM = 9;
+const PEEK = 140;
+
+const $ = (id) => document.getElementById(id);
+const isMobile = () => window.matchMedia("(max-width: 760px)").matches;
 
 const map = L.map("map", { preferCanvas: true }).setView([30, 20], 3);
 
@@ -173,7 +208,21 @@ let activeId = null;
 const layers = new Map();
 const show = { hybrid: true, solar: true, wind: true };
 
-const $ = (id) => document.getElementById(id);
+function fitPad() {
+  if (!isMobile()) return { padding: [30, 30] };
+  const closed = $("side").classList.contains("closed");
+  const h = closed ? PEEK : Math.round(window.innerHeight * 0.66);
+  return { paddingTopLeft: [20, 70], paddingBottomRight: [20, h + 20] };
+}
+
+function setSheet(open) {
+  $("side").classList.toggle("closed", !open);
+}
+
+function updateArrow() {
+  const c = $("legend").classList.contains("collapsed");
+  $("legendArrow").textContent = c !== isMobile() ? "▲" : "▼";
+}
 
 function popup(p) {
   return `<b>Station #${p.id}</b><br>
@@ -218,7 +267,7 @@ function applyFilters(fitMap) {
     style: () => style,
     onEachFeature: (f, l) => {
       layers.set(f.properties.id, l);
-      l.bindPopup(popup(f.properties));
+      l.bindPopup(popup(f.properties), { maxWidth: 260, autoPanPaddingBottomRight: [20, 160] });
       l.on("click", () => select(f.properties.id, false));
     }
   });
@@ -245,7 +294,7 @@ function applyFilters(fitMap) {
 
   renderList();
 
-  if (fitMap && filtered.length) map.fitBounds(hybridLayer.getBounds(), { padding: [30, 30] });
+  if (fitMap && filtered.length) map.fitBounds(hybridLayer.getBounds(), fitPad());
 }
 
 function renderList() {
@@ -269,7 +318,8 @@ function select(id, zoom) {
   if (!l) return;
   l.setStyle(styleActive);
   if (zoom) {
-    map.fitBounds(l.getBounds(), { maxZoom: 14, padding: [40, 40] });
+    if (isMobile()) setSheet(false);
+    map.fitBounds(l.getBounds(), Object.assign({ maxZoom: 14 }, fitPad()));
     l.openPopup();
   }
   renderList();
@@ -285,15 +335,37 @@ $("tSolar").addEventListener("change", (e) => { show.solar = e.target.checked; r
 $("tWind").addEventListener("change", (e) => { show.wind = e.target.checked; redraw(); });
 
 map.on("zoomend", redraw);
+map.on("click", () => { if (isMobile()) setSheet(false); });
+
+$("top").addEventListener("click", () => {
+  if (!isMobile()) return;
+  setSheet($("side").classList.contains("closed"));
+});
+
+let touchY = null;
+$("top").addEventListener("touchstart", (e) => { touchY = e.touches[0].clientY; }, { passive: true });
+$("top").addEventListener("touchend", (e) => {
+  if (touchY === null || !isMobile()) return;
+  const dy = e.changedTouches[0].clientY - touchY;
+  touchY = null;
+  if (dy > 40) setSheet(false);
+  else if (dy < -40) setSheet(true);
+});
 
 $("legendHd").onclick = () => {
   const lg = $("legend");
   lg.classList.toggle("collapsed");
-  $("legendArrow").textContent = lg.classList.contains("collapsed") ? "▲" : "▼";
+  if (isMobile() && !lg.classList.contains("collapsed")) setSheet(false);
+  updateArrow();
 };
 
+if (isMobile()) $("legend").classList.add("collapsed");
+updateArrow();
+window.addEventListener("resize", updateArrow);
+
 $("fit").onclick = () => {
-  if (hybridLayer && filtered.length) map.fitBounds(hybridLayer.getBounds(), { padding: [30, 30] });
+  if (isMobile()) setSheet(false);
+  if (hybridLayer && filtered.length) map.fitBounds(hybridLayer.getBounds(), fitPad());
 };
 
 $("dl").onclick = () => {
