@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hybrid Renewable Stations</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; font-family: system-ui, sans-serif; background: #111827; color: #e5e7eb; }
+  #app { display: flex; height: 100%; }
+  #side { width: 340px; display: flex; flex-direction: column; border-right: 1px solid #1f2937; background: #111827; }
+  #mapwrap { flex: 1; position: relative; }
+  #map { position: absolute; inset: 0; }
+  header { padding: 16px; border-bottom: 1px solid #1f2937; }
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  .sub { font-size: 12px; color: #9ca3af; }
+  .filters { padding: 14px 16px; border-bottom: 1px solid #1f2937; }
+  .row { margin-bottom: 12px; }
+  .row label { display: flex; justify-content: space-between; font-size: 12px; color: #9ca3af; margin-bottom: 4px; }
+  .row label b { color: #fde047; }
+  input[type=range] { width: 100%; accent-color: #facc15; }
+  select { width: 100%; background: #1f2937; color: #e5e7eb; border: 1px solid #374151; border-radius: 6px; padding: 8px; font-size: 13px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 16px; border-bottom: 1px solid #1f2937; }
+  .stat { background: #1f2937; border-radius: 8px; padding: 8px; text-align: center; }
+  .stat b { display: block; font-size: 18px; color: #fde047; }
+  .stat span { font-size: 11px; color: #9ca3af; }
+  #list { flex: 1; overflow-y: auto; }
+  .item { padding: 10px 16px; border-bottom: 1px solid #1f2937; cursor: pointer; font-size: 13px; }
+  .item:hover, .item.active { background: #1f2937; }
+  .item .t { display: flex; justify-content: space-between; margin-bottom: 2px; }
+  .item .t b { color: #fde047; }
+  .item .d { font-size: 11px; color: #9ca3af; }
+  .toolbar { padding: 10px 16px; border-top: 1px solid #1f2937; display: flex; gap: 8px; }
+  button { flex: 1; background: #facc15; color: #111827; border: 0; border-radius: 6px; padding: 8px; font-weight: 600; cursor: pointer; }
+  button.alt { background: #374151; color: #e5e7eb; }
+  .leaflet-popup-content { font-size: 13px; line-height: 1.6; }
+
+  #legend {
+    position: absolute; left: 12px; bottom: 28px; z-index: 1000;
+    width: 320px; max-width: calc(100% - 24px);
+    background: rgba(17, 24, 39, 0.95); border: 1px solid #374151; border-radius: 10px;
+    font-size: 12px; line-height: 1.7; direction: rtl; text-align: right;
+  }
+  #legend .hd { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; cursor: pointer; font-weight: 600; font-size: 13px; }
+  #legend .bd { padding: 0 12px 10px; max-height: 50vh; overflow-y: auto; }
+  #legend.collapsed .bd { display: none; }
+  .li { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; }
+  .li input { margin-top: 5px; accent-color: #facc15; flex: none; }
+  .sw { flex: none; margin-top: 4px; }
+  .sw.y { width: 24px; height: 16px; border-radius: 3px; border: 2px solid #facc15; background: rgba(250, 204, 21, 0.18); }
+  .sw.r { width: 24px; height: 16px; border-radius: 3px; border: 1px solid #ef4444; background: rgba(239, 68, 68, 0.45); }
+  .sw.c { width: 12px; height: 12px; border-radius: 50%; background: #22d3ee; margin: 6px 6px 0; }
+  .li label { cursor: pointer; display: block; }
+  .li b { display: block; color: #f3f4f6; }
+  .li .n { display: block; color: #9ca3af; }
+  #windHint { color: #fde047; }
+  .note { border-top: 1px solid #374151; padding-top: 8px; color: #9ca3af; }
+  .note p { margin: 0 0 6px; }
+
+  @media (max-width: 760px) {
+    #app { flex-direction: column-reverse; }
+    #side { width: 100%; height: 45%; border-right: 0; border-top: 1px solid #1f2937; }
+    #legend { width: 260px; bottom: 24px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <header>
+      <h1>Hybrid Solar + Wind Stations</h1>
+      <div class="sub">Source: Microsoft Global Renewables Watch (2024 Q2)</div>
+    </header>
+    <div class="filters">
+      <div class="row">
+        <label>Region</label>
+        <select id="fRegion"></select>
+      </div>
+      <div class="row">
+        <label>Min turbines <b id="vTurb">3</b></label>
+        <input id="fTurb" type="range" min="3" max="30" value="3">
+      </div>
+      <div class="row">
+        <label>Min solar area (km²) <b id="vSolar">0.1</b></label>
+        <input id="fSolar" type="range" min="0.1" max="4" step="0.1" value="0.1">
+      </div>
+      <div class="row">
+        <label>Hybrid since (from year) <b id="vYear">2017</b></label>
+        <input id="fYear" type="range" min="2017" max="2024" value="2017">
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="sCount">0</b><span>stations</span></div>
+      <div class="stat"><b id="sTurb">0</b><span>turbines</span></div>
+      <div class="stat"><b id="sSolar">0</b><span>solar km²</span></div>
+    </div>
+    <div id="list"></div>
+    <div class="toolbar">
+      <button id="fit">Fit all</button>
+      <button id="dl" class="alt">Download GeoJSON</button>
+    </div>
+  </aside>
+
+  <div id="mapwrap">
+    <div id="map"></div>
+    <div id="legend">
+      <div class="hd" id="legendHd"><span>شرح الألوان</span><span id="legendArrow">▼</span></div>
+      <div class="bd">
+        <div class="li">
+          <input type="checkbox" id="tHybrid" checked>
+          <span class="sw y"></span>
+          <label for="tHybrid">
+            <b>الأصفر: حدود المحطة الهجينة</b>
+            <span class="n">منطقة مقفولة بتلم الـ solar والـ turbines اللي المسافة بينهم 2 كم أو أقل. اضغط عليها عشان تشوف بياناتها.</span>
+          </label>
+        </div>
+        <div class="li">
+          <input type="checkbox" id="tSolar" checked>
+          <span class="sw r"></span>
+          <label for="tSolar">
+            <b>الأحمر: Solar farms</b>
+            <span class="n">مساحات الألواح الشمسية كما اكتشفها موديل Microsoft من صور الأقمار الصناعية.</span>
+          </label>
+        </div>
+        <div class="li">
+          <input type="checkbox" id="tWind" checked>
+          <span class="sw c"></span>
+          <label for="tWind">
+            <b>السيان (الأزرق الفاتح): Wind turbines</b>
+            <span class="n">كل نقطة = توربين رياح واحد. <span id="windHint">قرّب الخريطة عشان تظهر.</span></span>
+          </label>
+        </div>
+        <div class="note">
+          <p><b>Hybrid since:</b> أحدث سنة إنشاء بين الـ solar والـ turbines في المحطة، يعني السنة اللي بقت فيها هجينة فعلاً. سنة 2017 معناها إنها موجودة من بداية الداتا.</p>
+          <p><b>شروط المحطة:</b> 3 turbines على الأقل، وsolar مساحته 0.1 كم² أو أكتر.</p>
+          <p><b>الداتا:</b> Microsoft Global Renewables Watch حتى الربع التاني من 2024، وممكن يكون فيها أخطاء اكتشاف.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const WIND_ZOOM = 9;
+
+const map = L.map("map", { preferCanvas: true }).setView([30, 20], 3);
+
+const sat = L.tileLayer(
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  { attribution: "Esri World Imagery", maxZoom: 18 }
+).addTo(map);
+
+const osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "OpenStreetMap", maxZoom: 19
+});
+
+L.control.layers({ Satellite: sat, Streets: osm }).addTo(map);
+
+const style = { color: "#facc15", weight: 2, fillColor: "#facc15", fillOpacity: 0.12 };
+const styleActive = { color: "#ffffff", weight: 3, fillColor: "#facc15", fillOpacity: 0.3 };
+const solarStyle = { color: "#ef4444", weight: 1, fillColor: "#ef4444", fillOpacity: 0.45 };
+
+let data = null;
+let solarData = { features: [] };
+let windData = { features: [] };
+let hybridLayer = null;
+let solarLayer = null;
+let windLayer = null;
+let filtered = [];
+let activeId = null;
+const layers = new Map();
+const show = { hybrid: true, solar: true, wind: true };
+
+const $ = (id) => document.getElementById(id);
+
+function popup(p) {
+  return `<b>Station #${p.id}</b><br>
+    Region: ${p.region}<br>
+    Country: ${p.country}<br>
+    Turbines: ${p.n_turbines}<br>
+    Solar farms: ${p.n_solar} (${p.solar_area_km2} km²)<br>
+    Hybrid area: ${p.area_km2} km²<br>
+    Hybrid since: ${p.hybrid_since}`;
+}
+
+function redraw() {
+  [hybridLayer, solarLayer, windLayer].forEach((l) => {
+    if (l && map.hasLayer(l)) map.removeLayer(l);
+  });
+  if (show.hybrid && hybridLayer) hybridLayer.addTo(map);
+  if (show.solar && solarLayer) solarLayer.addTo(map);
+  const windVisible = map.getZoom() >= WIND_ZOOM;
+  if (show.wind && windLayer && windVisible) windLayer.addTo(map);
+  $("windHint").style.display = windVisible ? "none" : "inline";
+}
+
+function applyFilters(fitMap) {
+  const reg = $("fRegion").value;
+  const minT = +$("fTurb").value;
+  const minS = +$("fSolar").value;
+  const minY = +$("fYear").value;
+  $("vTurb").textContent = minT;
+  $("vSolar").textContent = minS.toFixed(1);
+  $("vYear").textContent = minY;
+
+  filtered = data.features.filter((f) => {
+    const p = f.properties;
+    return (reg === "all" || p.region === reg) &&
+      p.n_turbines >= minT && p.solar_area_km2 >= minS && p.hybrid_since >= minY;
+  });
+
+  const ids = new Set(filtered.map((f) => f.properties.id));
+  layers.clear();
+
+  hybridLayer = L.geoJSON({ type: "FeatureCollection", features: filtered }, {
+    style: () => style,
+    onEachFeature: (f, l) => {
+      layers.set(f.properties.id, l);
+      l.bindPopup(popup(f.properties));
+      l.on("click", () => select(f.properties.id, false));
+    }
+  });
+
+  solarLayer = L.geoJSON(
+    { type: "FeatureCollection", features: solarData.features.filter((f) => ids.has(f.properties.station)) },
+    { style: () => solarStyle, interactive: false }
+  );
+
+  windLayer = L.geoJSON(
+    { type: "FeatureCollection", features: windData.features.filter((f) => ids.has(f.properties.station)) },
+    {
+      pointToLayer: (f, ll) => L.circleMarker(ll, {
+        radius: 3, color: "#22d3ee", weight: 0, fillColor: "#22d3ee", fillOpacity: 1, interactive: false
+      })
+    }
+  );
+
+  redraw();
+
+  $("sCount").textContent = filtered.length;
+  $("sTurb").textContent = filtered.reduce((a, f) => a + f.properties.n_turbines, 0);
+  $("sSolar").textContent = filtered.reduce((a, f) => a + f.properties.solar_area_km2, 0).toFixed(1);
+
+  renderList();
+
+  if (fitMap && filtered.length) map.fitBounds(hybridLayer.getBounds(), { padding: [30, 30] });
+}
+
+function renderList() {
+  const sorted = [...filtered].sort((a, b) => b.properties.n_turbines - a.properties.n_turbines);
+  $("list").innerHTML = sorted.map((f) => {
+    const p = f.properties;
+    return `<div class="item ${p.id === activeId ? "active" : ""}" data-id="${p.id}">
+      <div class="t"><span>#${p.id} · ${p.region}</span><b>${p.n_turbines} turbines</b></div>
+      <div class="d">${p.n_solar} solar · ${p.solar_area_km2} km² · ${p.area_km2} km² area · since ${p.hybrid_since}</div>
+    </div>`;
+  }).join("");
+  document.querySelectorAll(".item").forEach((el) => {
+    el.onclick = () => select(+el.dataset.id, true);
+  });
+}
+
+function select(id, zoom) {
+  if (activeId !== null && layers.has(activeId)) layers.get(activeId).setStyle(style);
+  activeId = id;
+  const l = layers.get(id);
+  if (!l) return;
+  l.setStyle(styleActive);
+  if (zoom) {
+    map.fitBounds(l.getBounds(), { maxZoom: 14, padding: [40, 40] });
+    l.openPopup();
+  }
+  renderList();
+  const el = document.querySelector(`.item[data-id="${id}"]`);
+  if (el) el.scrollIntoView({ block: "nearest" });
+}
+
+$("fRegion").addEventListener("change", () => applyFilters(true));
+["fTurb", "fSolar", "fYear"].forEach((id) => $(id).addEventListener("input", () => applyFilters(false)));
+
+$("tHybrid").addEventListener("change", (e) => { show.hybrid = e.target.checked; redraw(); });
+$("tSolar").addEventListener("change", (e) => { show.solar = e.target.checked; redraw(); });
+$("tWind").addEventListener("change", (e) => { show.wind = e.target.checked; redraw(); });
+
+map.on("zoomend", redraw);
+
+$("legendHd").onclick = () => {
+  const lg = $("legend");
+  lg.classList.toggle("collapsed");
+  $("legendArrow").textContent = lg.classList.contains("collapsed") ? "▲" : "▼";
+};
+
+$("fit").onclick = () => {
+  if (hybridLayer && filtered.length) map.fitBounds(hybridLayer.getBounds(), { padding: [30, 30] });
+};
+
+$("dl").onclick = () => {
+  const blob = new Blob(
+    [JSON.stringify({ type: "FeatureCollection", features: filtered })],
+    { type: "application/geo+json" }
+  );
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "hybrid_filtered.geojson";
+  a.click();
+};
+
+const getJSON = (u) => fetch(u).then((r) => {
+  if (!r.ok) throw new Error(u);
+  return r.json();
+});
+
+Promise.all([
+  getJSON("hybrid_web.geojson"),
+  getJSON("hybrid_solar.geojson").catch(() => ({ features: [] })),
+  getJSON("hybrid_wind.geojson").catch(() => ({ features: [] }))
+])
+  .then(([h, s, w]) => {
+    data = h;
+    solarData = s;
+    windData = w;
+    const regions = [...new Set(data.features.map((f) => f.properties.region))].sort();
+    $("fRegion").innerHTML = '<option value="all">All regions</option>' +
+      regions.map((r) => `<option value="${r}">${r}</option>`).join("");
+    const years = data.features.map((f) => f.properties.hybrid_since);
+    $("fYear").min = Math.min(...years);
+    $("fYear").max = Math.max(...years);
+    $("fYear").value = Math.min(...years);
+    applyFilters(true);
+  })
+  .catch(() => {
+    $("list").innerHTML = '<div class="item">Could not load hybrid_web.geojson. Run a local server from this folder.</div>';
+  });
+</script>
+</body>
+</html>
